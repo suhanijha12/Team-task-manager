@@ -1,6 +1,32 @@
 # ProjektPilot
 
-A team project management app built with Next.js. Create projects, manage tasks, assign work, and control access with role-based permissions.
+ProjektPilot is a production-ready team task management app for small teams that need one place to plan project work, assign responsibilities, track task progress, and manage project access. It combines authenticated project workspaces, role-based permissions, project dashboards, task boards, and member management in a single Next.js application backed by Postgres.
+
+The app is designed for teams that need more structure than a shared checklist but do not need a heavyweight enterprise project management system. A user can create a project, add team members, define work as tasks, assign ownership, move work through a review lifecycle, and keep visibility across all active work from global and project-specific views.
+
+## What Users Can Do
+
+- **Create and manage projects** with names, descriptions, deadlines, member lists, and project-level settings.
+- **Invite existing users into projects** and assign access levels that control whether they can view work, edit tasks, or manage the project.
+- **Plan and track tasks** with title, description, assignee, priority, due date, and status.
+- **Use Kanban or list workflows** to move tasks from `TODO` to `IN_PROGRESS`, `UNDER_REVIEW`, and `COMPLETED`.
+- **Search and filter work** by query, status, priority, and project so users can quickly narrow down active tasks.
+- **See dashboard summaries** for project counts, active work, task status totals, and overdue items.
+- **Manage workspace administration** through a dedicated admin area for people and project access decisions.
+
+## Product Scope
+
+ProjektPilot is scoped around collaborative project execution:
+
+- **Project owners and co-owners** can create projects, manage project settings, add or remove members, and control who can make changes.
+- **Editors and members** can contribute to task execution inside projects they belong to.
+- **Viewers** can follow project progress without changing project data.
+- **Individual contributors** can use the global task view to see their assigned work across multiple projects.
+- **Small team leads** can use project dashboards to monitor deadlines, progress, and workload without switching tools.
+
+The current scope intentionally focuses on core project and task operations. It does not include chat, file storage, billing, notifications, calendars, time tracking, or public project sharing. Those can be added later without changing the core project/member/task model.
+
+For a deeper product and technical scope, see [docs/project-scope.md](docs/project-scope.md).
 
 ## Tech Stack
 
@@ -9,6 +35,15 @@ A team project management app built with Next.js. Create projects, manage tasks,
 - **Auth** — JWT sessions in httpOnly cookies (`jose`, `bcryptjs`)
 - **UI** — Tailwind CSS, Radix UI primitives, Lucide icons, Sonner toasts
 - **Validation** — Zod
+
+## Application Surfaces
+
+- **Auth pages** - signup and login flows with JWT sessions stored in httpOnly cookies.
+- **Dashboard** - authenticated home surface for project/task summaries and quick access.
+- **Projects** - project list, project creation, project detail dashboards, and project settings.
+- **Tasks** - global task management across accessible projects with filters and board/list views.
+- **Admin** - workspace-oriented surface for project-role and people management.
+- **API route handlers** - JSON endpoints under `app/api/**` for auth, dashboards, projects, members, and tasks.
 
 ## Getting Started
 
