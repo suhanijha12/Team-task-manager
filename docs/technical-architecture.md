@@ -1,110 +1,180 @@
-# Team Task Manager - Technical Architecture Document
+# ProjektPilot Technical Architecture
 
-**Version:** 1.1
-**Date:** May 2, 2026
+**Version:** 2.0
+**Date:** May 3, 2026
 
----
+## 1. System Shape
 
-## 1. Tech Stack
+ProjektPilot is a single full-stack Next.js application. The same deployable app owns the user interface, server-rendered pages, JSON API route handlers, authentication helpers, authorization helpers, validation, and database access.
 
-### Application
-- **Framework:** Next.js App Router with TypeScript
-- **Frontend:** React Server Components by default, Client Components only for interactive UI
-- **Backend:** Next.js Route Handlers under `app/api/**/route.ts`
-- **Server mutations:** Server Actions where the caller is a trusted app form; Route Handlers for public JSON API endpoints
-- **Validation:** Zod schemas shared by route handlers and form actions
-- **Auth:** JWT in secure httpOnly cookies, bcrypt for password hashing
-- **Styling:** Tailwind CSS
-- **Icons:** Lucide React
-- **Toasts/Notifications:** Sonner or react-hot-toast
+The production target is Vercel for the Next.js runtime and Neon Postgres for persistent relational data.
 
-### Database
-- **Database:** Neon Postgres
-- **ORM:** Prisma ORM with generated TypeScript client
-- **Migrations:** Prisma Migrate committed in `prisma/migrations`
-- **Connection variables:** `DATABASE_URL` for pooled runtime queries and `DIRECT_URL` for migrations
+## 2. Runtime Stack
 
-### Deployment
-- **Platform:** Vercel recommended for the Next.js app
-- **Database host:** Neon
-- **Structure:** Single Next.js application
+| Layer | Technology |
+|---|---|
+| App framework | Next.js 16 App Router |
+| UI runtime | React 19 with Server and Client Components |
+| Language | TypeScript |
+| Styling | Tailwind CSS |
+| UI primitives | Local shadcn-style components, Radix UI, Lucide icons |
+| Notifications | Sonner |
+| Backend | Next.js Route Handlers under `app/api/**/route.ts` |
+| Database | Neon Postgres |
+| ORM | Prisma |
+| Validation | Zod |
+| Auth | JWT in httpOnly cookies, `jose`, `bcryptjs` |
+| Tests | Vitest |
+| Deployment | Vercel recommended |
 
----
+## 3. Project Structure
 
-## 2. Project Structure
-
-```
-team-task-manager/
-├── app/
-│   ├── (auth)/
-│   │   ├── login/page.tsx
-│   │   └── signup/page.tsx
-│   ├── (app)/
-│   │   ├── dashboard/page.tsx
-│   │   ├── projects/page.tsx
-│   │   ├── projects/new/page.tsx
-│   │   ├── projects/[projectId]/page.tsx
-│   │   └── projects/[projectId]/settings/page.tsx
-│   ├── api/
-│   │   ├── auth/
-│   │   │   ├── signup/route.ts
-│   │   │   ├── login/route.ts
-│   │   │   ├── logout/route.ts
-│   │   │   └── me/route.ts
-│   │   ├── dashboard/route.ts
-│   │   ├── projects/route.ts
-│   │   ├── projects/[projectId]/route.ts
-│   │   ├── projects/[projectId]/members/route.ts
-│   │   ├── projects/[projectId]/members/[userId]/route.ts
-│   │   ├── projects/[projectId]/tasks/route.ts
-│   │   └── tasks/[taskId]/route.ts
-│   ├── globals.css
-│   └── layout.tsx
-├── components/
-│   ├── dashboard/
-│   │   ├── stat-card.tsx
-│   │   └── overdue-list.tsx
-│   ├── layout/
-│   │   ├── app-shell.tsx
-│   │   ├── navbar.tsx
-│   │   └── sidebar.tsx
-│   ├── projects/
-│   │   ├── member-manager.tsx
-│   │   ├── project-card.tsx
-│   │   └── project-form.tsx
-│   └── tasks/
-│       ├── task-board.tsx
-│       ├── task-card.tsx
-│       ├── task-filters.tsx
-│       └── task-form.tsx
-├── lib/
-│   ├── auth.ts                  # JWT cookie helpers and current-user lookup
-│   ├── db.ts                    # Prisma client singleton
-│   ├── errors.ts                # API error helpers
-│   ├── permissions.ts           # project membership and role checks
-│   └── validators.ts            # Zod schemas
-├── prisma/
-│   ├── schema.prisma
-│   ├── migrations/
-│   └── seed.ts
-├── middleware.ts                # route protection for app pages
-├── .env.example
-├── next.config.ts
-├── package.json
-├── tailwind.config.ts
-└── tsconfig.json
+```text
+app/
+  (app)/
+    admin/page.tsx
+    dashboard/page.tsx
+    layout.tsx
+    loading.tsx
+    projects/
+      page.tsx
+      new/page.tsx
+      [projectId]/
+        page.tsx
+        settings/page.tsx
+    tasks/page.tsx
+  (auth)/
+    login/page.tsx
+    signup/page.tsx
+    loading.tsx
+  api/
+    auth/
+    dashboard/
+    projects/
+    tasks/
+  globals.css
+  layout.tsx
+  loading.tsx
+  page.tsx
+components/
+  layout/app-shell.tsx
+  ui/
+  auth-form.tsx
+  member-form.tsx
+  project-form.tsx
+  task-form.tsx
+  task-management-view.tsx
+lib/
+  auth.ts
+  db.ts
+  errors.ts
+  permissions.ts
+  serializers.ts
+  utils.ts
+  validators.ts
+prisma/
+  migrations/
+  schema.prisma
+  seed.ts
+docs/
+  adr/
+  prd-team-task-manager.md
+  project-scope.md
+  technical-architecture.md
+proxy.ts
 ```
 
----
+## 4. Routing and Rendering
 
-## 3. Database Schema (Postgres)
+The app uses route groups to separate public auth pages from authenticated app pages:
 
-### Prisma Model Outline
+- `app/(auth)` contains login and signup.
+- `app/(app)` contains dashboard, projects, tasks, admin, and authenticated shell routes.
+- `app/api` contains JSON route handlers for client interactions and data mutations.
+
+Server Components are preferred for authenticated read-heavy pages. Client Components are used for forms, dialogs, filtering, toasts, theme toggles, and drag/drop task board interactions.
+
+`app/(app)/layout.tsx` calls `requireUser()` and wraps authenticated pages in the app shell. `proxy.ts` adds redirect behavior for configured app routes and redirects authenticated users away from auth pages. Server-side auth checks still happen inside API route handlers and protected data loaders through `requireUser()`.
+
+## 5. Authentication
+
+Authentication is centralized in `lib/auth.ts`.
+
+Session behavior:
+
+- Signup and login validate input with Zod.
+- Passwords are hashed with bcrypt.
+- Successful auth sets a JWT in an httpOnly cookie.
+- `requireUser()` verifies the cookie, loads the user from Postgres, and rejects missing or invalid sessions.
+- Logout clears the session cookie.
+
+Environment requirement:
+
+- `JWT_SECRET` must be at least 32 characters.
+
+Cookie expectations:
+
+- httpOnly
+- same-site behavior for app navigation
+- secure cookies in production
+
+## 6. Authorization Model
+
+Project membership is the primary authorization boundary. A user must have a `ProjectMember` row for a project before they can read or mutate that project.
+
+Authorization helpers live in `lib/permissions.ts`:
+
+- `requireProjectMember(projectId, userId)`
+- `requireProjectAdmin(projectId, userId)`
+- `requireTaskAccess(taskId, userId)`
+- `canManageProjectPeople(role)`
+- `canWriteProjectTasks(role)`
+- `canEditTask(...)`
+- `assertAssigneeIsProjectMember(projectId, assigneeId)`
+- `assertProjectHasAnotherAdmin(projectId, excludedUserId)`
+
+Role capabilities:
+
+| Role | Read project | Create/update own tasks | Manage all tasks | Manage people/settings |
+|---|---:|---:|---:|---:|
+| `VIEWER` | Yes | No | No | No |
+| `MEMBER` | Yes | Yes | No | No |
+| `EDITOR` | Yes | Yes | No | No |
+| `CO_OWNER` | Yes | Yes | Yes | Yes |
+| `ADMIN` | Yes | Yes | Yes | Yes |
+
+`requireProjectAdmin` currently means elevated project management access. It accepts `ADMIN` and `CO_OWNER`.
+
+## 7. Database Architecture
+
+Prisma owns schema definition, migrations, and generated TypeScript client access.
+
+Datasource:
+
+```prisma
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+```
+
+Core models:
+
+- `User`
+- `Project`
+- `ProjectMember`
+- `Task`
+
+Core enums:
 
 ```prisma
 enum ProjectRole {
   ADMIN
   MEMBER
+  CO_OWNER
+  EDITOR
+  VIEWER
 }
 
 enum TaskStatus {
@@ -119,219 +189,98 @@ enum TaskPriority {
   MEDIUM
   HIGH
 }
-
-model User {
-  id           String          @id @default(uuid()) @db.Uuid
-  name         String          @db.VarChar(50)
-  email        String          @unique @db.VarChar(255)
-  passwordHash String          @map("password_hash")
-  createdAt    DateTime        @default(now()) @map("created_at")
-  updatedAt    DateTime        @updatedAt @map("updated_at")
-  projectsMade Project[]       @relation("ProjectCreator")
-  memberships  ProjectMember[]
-  tasksMade     Task[]          @relation("TaskCreator")
-  assignedTasks Task[]          @relation("TaskAssignee")
-
-  @@map("users")
-}
-
-model Project {
-  id          String          @id @default(uuid()) @db.Uuid
-  name        String          @db.VarChar(100)
-  description String          @default("") @db.VarChar(500)
-  deadline    DateTime?
-  createdById String          @map("created_by_id") @db.Uuid
-  createdBy   User            @relation("ProjectCreator", fields: [createdById], references: [id])
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
-  members     ProjectMember[]
-  tasks       Task[]
-
-  @@index([createdById])
-  @@map("projects")
-}
-
-model ProjectMember {
-  id        String      @id @default(uuid()) @db.Uuid
-  projectId String      @map("project_id") @db.Uuid
-  userId    String      @map("user_id") @db.Uuid
-  role      ProjectRole
-  joinedAt  DateTime    @default(now()) @map("joined_at")
-  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([projectId, userId])
-  @@index([userId])
-  @@map("project_members")
-}
-
-model Task {
-  id          String       @id @default(uuid()) @db.Uuid
-  title       String       @db.VarChar(200)
-  description String       @default("") @db.VarChar(2000)
-  status      TaskStatus   @default(TODO)
-  priority    TaskPriority @default(MEDIUM)
-  dueDate     DateTime?    @map("due_date")
-  projectId   String       @map("project_id") @db.Uuid
-  assigneeId  String?      @map("assignee_id") @db.Uuid
-  createdById String       @map("created_by_id") @db.Uuid
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
-  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignee    User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  createdBy   User         @relation("TaskCreator", fields: [createdById], references: [id])
-
-  @@index([projectId, status])
-  @@index([assigneeId])
-  @@index([dueDate])
-  @@map("tasks")
-}
 ```
 
----
+Important relational rules:
 
-## 4. Auth Flow
+- Project creator is stored on `Project.createdById`.
+- Project access is stored in `ProjectMember`.
+- A user can belong to a project only once because of `@@unique([projectId, userId])`.
+- Project deletion cascades project members and tasks.
+- Task assignee deletion or removal does not delete the task; assignee references are nullable.
 
-```
-[Signup]
-Client -> POST /api/auth/signup { name, email, password }
-Route Handler -> Validate -> Hash password -> Create user -> Set httpOnly JWT cookie -> Return { user }
+## 8. API Design
 
-[Login]
-Client -> POST /api/auth/login { email, password }
-Route Handler -> Validate -> Compare hash -> Set httpOnly JWT cookie -> Return { user }
+Route handlers follow a consistent pattern:
 
-[Protected App Page]
-Browser -> /dashboard
-middleware.ts -> Verify cookie token -> Continue or redirect to /login
+1. Resolve the current user with `requireUser()` for protected endpoints.
+2. Parse route params and request bodies with Zod validators.
+3. Check project membership or role capability before database reads/writes.
+4. Validate cross-record invariants such as assignee membership.
+5. Use Prisma for persistence.
+6. Return consistent JSON responses through `lib/errors.ts` helpers.
 
-[Protected API Request]
-Client -> GET /api/projects
-Route Handler -> getCurrentUser() -> Query authorized records -> Return JSON
-```
+Implemented endpoint groups:
 
-**JWT payload:**
+- `app/api/auth/**`
+- `app/api/dashboard/route.ts`
+- `app/api/projects/route.ts`
+- `app/api/projects/[projectId]/route.ts`
+- `app/api/projects/[projectId]/members/route.ts`
+- `app/api/projects/[projectId]/members/[userId]/route.ts`
+- `app/api/projects/[projectId]/tasks/route.ts`
+- `app/api/projects/[projectId]/tasks/[taskId]/route.ts`
+- `app/api/tasks/[taskId]/route.ts`
 
-```json
-{ "userId": "...", "email": "..." }
-```
+## 9. Validation and Error Handling
 
-**Token storage:** secure httpOnly cookie with `sameSite=lax`. Use `secure=true` in production.
+Validation schemas live in `lib/validators.ts` and cover:
 
----
+- Auth payloads
+- Project params
+- Task params
+- Member params
+- Project create/update inputs
+- Member create/update inputs
+- Task create/update inputs
+- Task query filters and pagination
 
-## 5. Backend Boundaries
+Error helpers live in `lib/errors.ts`. Route handlers should throw typed application errors or return helper responses rather than each route inventing its own JSON error shape.
 
-### Route Handler Pattern
+## 10. Data Fetching and UI State
 
-Each route handler should:
-- Read and validate request input with Zod
-- Resolve the current user from the auth cookie
-- Run permission checks before database writes
-- Use Prisma transactions for multi-step writes
-- Return a consistent JSON response and status code
+Server-side data fetching is used for page-level authenticated data where practical. Client-side route calls are used for interactive workflows:
 
-### Permission Helpers
+- Login/signup forms
+- Logout
+- Project creation and updates
+- Member add/update/remove
+- Task create/update/delete
+- Kanban status transitions
+- Task filters and view switching
 
-```
-requireUser()
-  -> verifies cookie JWT
-  -> loads the user from Postgres
-  -> throws 401 when missing or invalid
+`TaskManagementView` owns client-side search, filters, board/list switching, and optimistic status updates for the Kanban workflow.
 
-requireProjectMember(projectId, userId)
-  -> loads ProjectMember
-  -> throws 403 when user is not in project
+## 11. Deployment and Configuration
 
-requireProjectAdmin(projectId, userId)
-  -> loads ProjectMember with role ADMIN
-  -> throws 403 when user is not an admin
-```
+Required environment variables:
 
-### Mutations Requiring Transactions
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | Pooled runtime Postgres connection string |
+| `DIRECT_URL` | Direct Postgres connection string for migrations |
+| `JWT_SECRET` | Session signing secret, minimum 32 characters |
+| `NODE_ENV` | Runtime environment |
 
-- Project creation plus creator admin membership
-- Member role updates that must preserve at least one admin
-- Member removal that must preserve at least one admin
-- Task creation with assignee membership validation
-
----
-
-## 6. Deployment Strategy
-
-### Vercel + Neon
-
-**Build command:**
-
-```bash
-npm run build
-```
-
-**Production start command:**
-
-```bash
-npm start
-```
-
-**Migration command:**
-
-```bash
-npx prisma migrate deploy
-```
-
-Run migrations before or during deployment using a CI step with `DIRECT_URL` available.
-
-### Environment Variables
-
-```
-DATABASE_URL=postgresql://...neon.tech/...?...pooler...
-DIRECT_URL=postgresql://...neon.tech/...
-JWT_SECRET=<random-32-byte-secret>
-NODE_ENV=production
-```
-
-### Local Development
+Production flow:
 
 ```bash
 npm install
-npx prisma migrate dev
-npm run dev
+npm run db:deploy
+npm run build
+npm run start
 ```
 
-Use a Neon development branch or a local Postgres database for local development. Keep production and development connection strings separate.
+Vercel deployments should run committed Prisma migrations before serving code that depends on the new schema.
 
----
+## 12. Operational Boundaries
 
-## 7. Key Implementation Notes
+The current architecture is intentionally scoped to request/response product workflows. It does not include background workers, queue consumers, email delivery, file processing, or organization-level multi-tenancy.
 
-### Data Fetching
-- Fetch private dashboard and project data in Server Components where possible.
-- Use Route Handlers for client-side interactions that need JSON responses.
-- Mark user-specific data as dynamic; do not cache authenticated database responses globally.
+Future extensions should preserve these boundaries:
 
-### Password Hashing
-- Use bcrypt with salt rounds = 10 or higher.
-- Store only `passwordHash`.
-- Never return password hashes in API responses.
-
-### Input Validation
-- Trim all string inputs.
-- Use Zod for body, params, and query validation.
-- Return field-level validation details for forms.
-
-### SQL Safety
-- Use Prisma query APIs for normal reads and writes.
-- Avoid raw SQL unless needed for a specific aggregate or migration.
-- If raw SQL is necessary, use parameterized Prisma APIs only.
-
-### Error Handling
-- Use a small app error helper with `statusCode`, `code`, and safe public message.
-- Map Prisma unique constraint errors to 409 responses.
-- Map validation errors to 400 responses.
-- Log unexpected errors server-side and return a generic 500 response.
-
-### Performance
-- Keep indexes on membership lookup, task status, assignee, and due date.
-- Paginate task listings with a default page size of 20.
-- Select only fields needed by the current view.
-- Use aggregate queries for dashboard counts instead of loading all tasks.
+- Keep authorization centralized in `lib/permissions.ts`.
+- Keep validation centralized in `lib/validators.ts`.
+- Keep auth cookie and user lookup logic centralized in `lib/auth.ts`.
+- Add new database behavior through Prisma migrations.
+- Keep Route Handlers thin and move shared business rules into `lib/`.

@@ -1,300 +1,260 @@
-# Team Task Manager — Product Requirements Document
+# ProjektPilot Product Requirements Document
 
-**Version:** 1.1
-**Date:** May 2, 2026
-**Author:** Girish / Grafik Studio
-
----
+**Version:** 2.0
+**Date:** May 3, 2026
+**Author:** Suhani Jha
 
 ## 1. Overview
 
-Team Task Manager is a full-stack web application that allows users to create projects, assign tasks, and track progress with role-based access control (Admin/Member). The platform provides a clean dashboard for visibility into task statuses, overdue items, and team workload.
+ProjektPilot is a team project and task management application for small teams that need a structured workspace for planning, assigning, tracking, and reviewing work. The product gives users authenticated access to project workspaces, member roles, task boards, dashboards, and administration tools in one full-stack Next.js application.
 
-**Target deployment:** Vercel for the Next.js app, with Neon Postgres as the production database
-**Timeline:** 1–2 days (8–12 hours of dev time)
+The current product scope is focused on collaborative project execution. Users can create projects, add members who already have accounts, assign role-based access, create tasks, assign owners, update status and priority, and track progress through dashboard and task-management views.
 
----
+ProjektPilot is not a generic chat, document, file-sharing, or enterprise portfolio-management system. Its core responsibility is to keep projects, members, and tasks organized with clear access controls.
 
-## 2. User Roles & Permissions
+## 2. Goals
 
-### Admin
-- Create, edit, delete projects
-- Invite/remove team members from projects
-- Create, assign, edit, delete any task within their projects
-- Change member roles within a project
-- View full dashboard with all project/task analytics
-- Mark tasks as complete or change status
+- Give teams a single place to manage project work and project access.
+- Make task ownership, status, priority, and deadlines visible.
+- Support both global task management and project-specific task management.
+- Keep project permissions explicit through a role model.
+- Provide a production-ready baseline with server-side auth, validation, database migrations, and deployable architecture.
 
-### Member
-- View projects they belong to
-- Create tasks within assigned projects
-- Edit/update tasks assigned to them (status, notes)
-- View dashboard filtered to their assignments
-- Cannot delete projects or remove members
-- Cannot edit tasks assigned to others (view only)
+## 3. Target Users
 
----
+| User type | What they use ProjektPilot for |
+|---|---|
+| Team lead | Creates projects, adds members, assigns work, and monitors progress |
+| Project owner | Manages project settings, access, and task execution |
+| Co-owner | Helps administer project members and project tasks |
+| Contributor | Creates and updates assigned or owned tasks |
+| Viewer | Follows project progress without changing project data |
 
-## 3. Core Features
+## 4. Current Product Capabilities
 
-### 3.1 Authentication (Signup/Login)
+### 4.1 Authentication
 
-**Signup flow:**
-- Fields: Full name, email, password, confirm password
-- Email must be unique
-- Password: minimum 8 characters, at least 1 uppercase, 1 number
-- On signup, user is redirected to dashboard (auto-login)
+Users can sign up, log in, log out, and access protected app pages through a JWT session stored in an httpOnly cookie.
 
-**Login flow:**
-- Fields: Email, password
-- JWT-based authentication with a secure httpOnly cookie
-- Token expiry: 7 days
-- "Forgot password" is out of scope for v1
+Current behavior:
 
-**Session management:**
-- Protected routes redirect to /login if unauthenticated
-- Token refresh is out of scope for v1
+- Signup requires name, email, password, and optional confirm password.
+- Email addresses are normalized and must be unique.
+- Passwords must be at least 8 characters and include an uppercase letter and a number.
+- Password hashes are stored with bcrypt.
+- Authenticated users are redirected away from login/signup pages.
+- Unauthenticated users are redirected to login for protected app routes.
 
-### 3.2 Project Management
+Out of scope for the current version:
 
-**Create project:**
-- Fields: Project name (required), description (optional), deadline (optional)
-- Creator is automatically assigned as Admin of that project
+- Password reset
+- Email verification
+- Social login
+- Token refresh flows
 
-**Project listing:**
-- Card/list view showing project name, member count, task summary, deadline
-- Filter: All projects / My projects
+### 4.2 Project Management
 
-**Project detail view:**
-- Overview: name, description, deadline, member list
-- Task board (Kanban or list view)
-- Settings tab (Admin only): edit project, manage members
+Users can create projects and become the initial project administrator. Project records include:
 
-**Add members to project:**
-- Admin can invite by email (user must already have an account)
-- Assign role: Admin or Member
-- Members see the project in their dashboard immediately
+- Name
+- Description
+- Optional deadline
+- Creator
+- Members
+- Tasks
 
-### 3.3 Task Management
+Users can view:
 
-**Create task:**
-- Fields: Title (required), description, assignee (dropdown of project members), priority (Low/Medium/High), due date, status (defaults to "To Do")
-- Only project Admins and Members can create tasks
+- A project list across accessible projects
+- A project detail dashboard
+- Project members
+- Project tasks
+- Project settings when their role permits it
 
-**Task statuses:**
-- To Do → In Progress → Under Review → Completed
-- Status transitions can happen in any direction (no enforced workflow)
+Project creation and detail views are dashboard-oriented. Large creation and edit forms should not dominate the main project page.
 
-**Task detail view:**
-- Full details: title, description, assignee, priority, status, due date, created date, created by
-- Edit inline or via modal
-- Activity log (stretch goal — nice to have)
+### 4.3 Member and Role Management
 
-**Task assignment:**
-- Dropdown of project members
-- Assignee receives visual indicator on dashboard
-- Unassigned tasks are allowed
+Project access is controlled by `ProjectMember` records. A user only has project access when they have membership for that project.
 
-**Task filtering & sorting:**
-- Filter by: status, priority, assignee, due date
-- Sort by: due date, priority, created date
+Supported roles:
 
-### 3.4 Dashboard
+| Role | Scope |
+|---|---|
+| `VIEWER` | Read-only project and task visibility |
+| `MEMBER` | Basic task participation and legacy-compatible contributor access |
+| `EDITOR` | Active task creation and contribution |
+| `CO_OWNER` | Project people/settings management and task administration |
+| `ADMIN` | Full project control |
 
-**Global dashboard (after login):**
-- Summary cards: Total tasks, To Do, In Progress, Under Review, Completed, Overdue
-- Overdue tasks list (due date < today AND status ≠ Completed)
-- Recent activity (last 10 task updates across all projects)
-- Project quick-links
+Role rules:
 
-**Per-role view:**
-- Admin sees all tasks across their projects
-- Member sees only tasks assigned to them
+- `ADMIN` and `CO_OWNER` can manage project people and settings.
+- `ADMIN`, `CO_OWNER`, `EDITOR`, and `MEMBER` can create project tasks.
+- `VIEWER` can inspect project work but should not mutate it.
+- A project must retain at least one `ADMIN` or `CO_OWNER`-level member before removing or demoting elevated access.
 
----
+### 4.4 Task Management
 
-## 4. Data Models
+Tasks are the core execution unit inside a project. A task includes:
 
-### User
-| Field | Type | Notes |
-|-------|------|-------|
-| id | UUID | Primary key |
-| name | String | Required |
-| email | String | Unique, required |
-| password | String | Hashed (bcrypt) |
-| createdAt | DateTime | Auto |
-| updatedAt | DateTime | Auto |
+- Title
+- Description
+- Status
+- Priority
+- Optional due date
+- Optional assignee
+- Creator
+- Project relationship
 
-### Project
-| Field | Type | Notes |
-|-------|------|-------|
-| id | UUID | Primary key |
-| name | String | Required |
-| description | String | Optional |
-| deadline | DateTime | Optional |
-| createdBy | FK → User | Required |
-| createdAt | DateTime | Auto |
-| updatedAt | DateTime | Auto |
+Supported statuses:
 
-### ProjectMember (join table)
-| Field | Type | Notes |
-|-------|------|-------|
-| id | UUID | Primary key |
-| projectId | FK → Project | Required |
-| userId | FK → User | Required |
-| role | Enum: ADMIN, MEMBER | Required |
-| joinedAt | DateTime | Auto |
+`TODO` -> `IN_PROGRESS` -> `UNDER_REVIEW` -> `COMPLETED`
 
-**Constraint:** Unique(projectId, userId)
+Supported priorities:
 
-### Task
-| Field | Type | Notes |
-|-------|------|-------|
-| id | UUID | Primary key |
-| title | String | Required |
-| description | String | Optional |
-| status | Enum: TODO, IN_PROGRESS, UNDER_REVIEW, COMPLETED | Default: TODO |
-| priority | Enum: LOW, MEDIUM, HIGH | Default: MEDIUM |
-| dueDate | DateTime | Optional |
-| projectId | FK → Project | Required |
-| assigneeId | FK → User | Nullable |
-| createdBy | FK → User | Required |
-| createdAt | DateTime | Auto |
-| updatedAt | DateTime | Auto |
+`LOW`, `MEDIUM`, `HIGH`
 
----
+Users can:
 
-## 5. API Design
+- Create tasks inside writable projects.
+- Assign tasks to project members.
+- Leave tasks unassigned.
+- Update task status, priority, due date, assignee, title, and description when permitted.
+- Drag tasks between statuses in the project task board.
+- Delete tasks when they have elevated project access.
 
-The backend is implemented with Next.js Route Handlers under `app/api/**/route.ts`. Authenticated app pages should fetch private data on the server where practical, and client-side interactions should call these JSON endpoints.
+Task edit rules:
+
+- Elevated roles can administer all tasks in the project.
+- Non-elevated contributors can edit tasks they created or are assigned to.
+- Assignees must be members of the project.
+
+### 4.5 Search, Filters, and Views
+
+ProjektPilot supports task scanning through:
+
+- Global task view across accessible projects
+- Project-specific task view
+- Kanban board
+- List view
+- Search query
+- Status filter
+- Priority filter
+- Project filter when viewing global tasks
+
+### 4.6 Dashboards and Admin Surface
+
+The app provides authenticated dashboards for operational visibility:
+
+- Dashboard page for high-level project and task activity
+- Project dashboard for project-specific members and work
+- Global tasks page for cross-project work management
+- Admin page for people and project-role administration
+
+The admin surface is intended for workspace and project access management, not system billing or tenant administration.
+
+## 5. Current Application Surfaces
+
+| Surface | Route |
+|---|---|
+| Home redirect | `/` |
+| Login | `/login` |
+| Signup | `/signup` |
+| Dashboard | `/dashboard` |
+| Projects list | `/projects` |
+| New project | `/projects/new` |
+| Project detail | `/projects/[projectId]` |
+| Project settings | `/projects/[projectId]/settings` |
+| Global tasks | `/tasks` |
+| Admin | `/admin` |
+
+## 6. API Scope
+
+The backend is implemented with Next.js Route Handlers under `app/api/**/route.ts`.
 
 ### Auth
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| POST | /api/auth/signup | Register new user | Public |
-| POST | /api/auth/login | Login, sets secure auth cookie | Public |
-| POST | /api/auth/logout | Logout, clears auth cookie | Protected |
-| GET | /api/auth/me | Get current user profile | Protected |
 
-### Projects
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| POST | /api/projects | Create project | Protected |
-| GET | /api/projects | List user's projects | Protected |
-| GET | /api/projects/:id | Get project details | Protected (member) |
-| PUT | /api/projects/:id | Update project | Protected (admin) |
-| DELETE | /api/projects/:id | Delete project | Protected (admin) |
-
-### Project Members
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| POST | /api/projects/:id/members | Add member | Protected (admin) |
-| GET | /api/projects/:id/members | List members | Protected (member) |
-| PUT | /api/projects/:id/members/:userId | Update role | Protected (admin) |
-| DELETE | /api/projects/:id/members/:userId | Remove member | Protected (admin) |
-
-### Tasks
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| POST | /api/projects/:id/tasks | Create task | Protected (member) |
-| GET | /api/projects/:id/tasks | List tasks (with filters) | Protected (member) |
-| GET | /api/tasks/:id | Get task detail | Protected (member) |
-| PUT | /api/tasks/:id | Update task | Protected (varies) |
-| DELETE | /api/tasks/:id | Delete task | Protected (admin) |
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `POST` | `/api/auth/signup` | Register user and set session cookie |
+| `POST` | `/api/auth/login` | Authenticate user and set session cookie |
+| `POST` | `/api/auth/logout` | Clear session cookie |
+| `GET` | `/api/auth/me` | Return current authenticated user |
 
 ### Dashboard
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| GET | /api/dashboard | Aggregated stats | Protected |
 
-**Query params for task listing:**
-- `status` — filter by status
-- `priority` — filter by priority
-- `assignee` — filter by assignee ID
-- `sort` — field to sort by (dueDate, priority, createdAt)
-- `order` — asc or desc
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/api/dashboard` | Return aggregate project/task stats for the user |
 
----
+### Projects
 
-## 6. Validation Rules
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/api/projects` | List accessible projects |
+| `POST` | `/api/projects` | Create a project and creator admin membership |
+| `GET` | `/api/projects/[projectId]` | Get project detail for a member |
+| `PUT` | `/api/projects/[projectId]` | Update project settings for elevated roles |
+| `DELETE` | `/api/projects/[projectId]` | Delete project for elevated roles |
 
-### Auth
-- **Email:** Valid format, trimmed, lowercase
-- **Password:** Min 8 chars, 1 uppercase, 1 number
-- **Name:** Min 2 chars, max 50 chars
+### Project Members
 
-### Project
-- **Name:** Required, min 2 chars, max 100 chars
-- **Description:** Max 500 chars
-- **Deadline:** Must be a future date (on create)
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/api/projects/[projectId]/members` | List members for a project member |
+| `POST` | `/api/projects/[projectId]/members` | Add an existing user by email |
+| `PUT` | `/api/projects/[projectId]/members/[userId]` | Update a member role |
+| `DELETE` | `/api/projects/[projectId]/members/[userId]` | Remove a member |
 
-### Task
-- **Title:** Required, min 2 chars, max 200 chars
-- **Description:** Max 2000 chars
-- **Status:** Must be valid enum value
-- **Priority:** Must be valid enum value
-- **Assignee:** Must be a member of the project
-- **Due date:** Optional, no past-date restriction (tasks can be retroactively logged)
+### Tasks
 
----
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/api/projects/[projectId]/tasks` | List project tasks with filters and pagination |
+| `POST` | `/api/projects/[projectId]/tasks` | Create a task in a writable project |
+| `PATCH` | `/api/projects/[projectId]/tasks/[taskId]` | Update task status from the project board |
+| `GET` | `/api/tasks/[taskId]` | Get task detail for a project member |
+| `PUT` | `/api/tasks/[taskId]` | Update task fields |
+| `DELETE` | `/api/tasks/[taskId]` | Delete a task for elevated roles |
 
-## 7. Error Handling
+## 7. Data Model Scope
 
-Standard error response format:
-```json
-{
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Human-readable message",
-    "details": []
-  }
-}
-```
+Core entities:
 
-**Error codes:**
-- 400 — Validation error
-- 401 — Unauthenticated
-- 403 — Unauthorized (wrong role)
-- 404 — Resource not found
-- 409 — Conflict (duplicate email, already a member)
-- 500 — Internal server error
+- `User`
+- `Project`
+- `ProjectMember`
+- `Task`
 
----
+Core enums:
 
-## 8. Pages & Routes (Frontend)
+- `ProjectRole`: `ADMIN`, `MEMBER`, `CO_OWNER`, `EDITOR`, `VIEWER`
+- `TaskStatus`: `TODO`, `IN_PROGRESS`, `UNDER_REVIEW`, `COMPLETED`
+- `TaskPriority`: `LOW`, `MEDIUM`, `HIGH`
 
-| Route | Page | Auth |
-|-------|------|------|
-| /login | Login page | Public |
-| /signup | Signup page | Public |
-| /dashboard | Main dashboard | Protected |
-| /projects | Projects list | Protected |
-| /projects/new | Create project | Protected |
-| /projects/:id | Project detail + task board | Protected |
-| /projects/:id/settings | Project settings (admin) | Protected (admin) |
+See `prisma/schema.prisma` for the executable schema and `docs/technical-architecture.md` for implementation details.
 
----
+## 8. Out of Scope
 
-## 9. Non-Functional Requirements
+The current version does not include:
 
-- **Responsive:** Works on desktop and mobile
-- **Performance:** API responses < 500ms for list endpoints
-- **Security:** Passwords hashed with bcrypt, JWT stored in secure httpOnly cookies, input validation, parameterized database access
-- **CORS:** Same-origin by default because frontend and backend run in the same Next.js app
-- **Environment variables:** All secrets in `.env` (`DATABASE_URL`, `DIRECT_URL`, `JWT_SECRET`, etc.)
-
----
-
-## 10. Out of Scope (v1)
-
-- Email notifications
-- Forgot/reset password
-- File attachments on tasks
-- Comments on tasks
-- Real-time updates (WebSocket)
-- Activity/audit log
-- User profile editing
-- Task dependencies
-- Recurring tasks
+- Password reset or email verification
+- Email invites or notification delivery
+- Comments, activity feeds, or audit logs
+- File attachments
+- Calendar integrations
 - Time tracking
+- Billing or subscriptions
+- Organization-level tenant management
+- Public project links
+- Native mobile apps
+
+## 9. Success Criteria
+
+- Users can authenticate and access only their permitted project data.
+- Project owners can manage projects, members, and roles.
+- Contributors can create and update permitted task work.
+- Viewers can inspect project work without mutation access.
+- The dashboard and task surfaces provide useful visibility across projects.
+- Production builds pass with committed Prisma migrations and environment-based configuration.

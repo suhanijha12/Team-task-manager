@@ -1,46 +1,49 @@
-# ADR 0001: Use Next.js App Router with Neon Postgres
+# ADR 0001: Use a Single Next.js App with Neon Postgres
 
 **Status:** Accepted
 **Date:** May 2, 2026
+**Updated:** May 3, 2026
 
 ## Context
 
-ProjektPilot needs a production-ready full-stack implementation for project and task management. The application requires authenticated pages, JSON API endpoints, role-based access control, relational project membership data, and a deployment path that keeps operational overhead low.
+ProjektPilot needs a production-ready app for authenticated project management, task workflows, role-based access, dashboards, and JSON APIs. The project should stay operationally simple while still supporting real relational data and deployable production architecture.
 
-The selected stack must support both frontend and backend code in one codebase and use Neon Postgres for the database.
+The selected stack must support frontend and backend work in one codebase and use Postgres as the production database.
 
 ## Decision
 
-Use a single Next.js App Router application for both frontend and backend:
+Use one Next.js App Router application for the product.
 
-- Render application pages with Next.js App Router.
-- Implement backend endpoints with Route Handlers under `app/api/**/route.ts`.
-- Use Server Components for authenticated read-heavy pages where practical.
-- Use Client Components for interactive forms, filters, and task board interactions.
+- Render pages with Next.js App Router.
+- Implement backend behavior with Route Handlers under `app/api/**/route.ts`.
+- Use Server Components for authenticated read-heavy views where practical.
+- Use Client Components for forms, filters, dialogs, theme toggles, and task board interactions.
 - Use Neon Postgres as the hosted relational database.
-- Use Prisma ORM for schema management, type-safe data access, and migrations.
-- Store auth sessions as JWTs in secure httpOnly cookies.
+- Use Prisma for schema definition, migrations, generated client access, and type-safe queries.
+- Store authenticated sessions as JWTs in secure httpOnly cookies.
+- Deploy the app as a single Vercel-compatible Next.js application.
 
 ## Consequences
 
-### Positive
+Positive:
 
-- One deployable application instead of separate frontend and backend services.
-- Route Handlers keep API behavior close to the app while preserving HTTP boundaries.
-- Postgres models project membership and task ownership with proper foreign keys and constraints.
-- Prisma migrations provide a repeatable database change workflow.
-- Neon supports separate development and production branches and serverless-friendly connection pooling.
+- One deployable application instead of separate frontend and API services.
+- Route Handlers preserve HTTP boundaries without a separate backend project.
+- Postgres models project membership, role checks, and task ownership with relational constraints.
+- Prisma migrations make database changes repeatable and reviewable.
+- Neon supports production Postgres without managing database infrastructure.
 
-### Negative
+Tradeoffs:
 
-- Long-running background jobs are not a natural fit for the web app runtime.
-- Prisma migrations require a direct database URL, separate from pooled runtime access.
-- Backend logic must stay carefully organized in `lib/` modules to avoid route handlers becoming too large.
+- Long-running background jobs and async workers are outside this app shape.
+- Prisma migrations need `DIRECT_URL`, separate from pooled runtime `DATABASE_URL`.
+- Backend business logic must stay centralized in `lib/` so route handlers do not become large.
+- App route protection and API authorization must both be maintained because client navigation protection is not enough.
 
-## Operational Notes
+## Current Implementation Notes
 
-- Use `DATABASE_URL` for pooled runtime queries.
-- Use `DIRECT_URL` for migrations.
-- Run `npx prisma migrate deploy` before production traffic uses a new schema.
-- Keep auth cookie handling centralized in `lib/auth.ts`.
-- Keep role checks centralized in `lib/permissions.ts`.
+- `proxy.ts` protects configured app routes and redirects authenticated users away from auth pages.
+- `lib/auth.ts` owns JWT cookie verification and current-user lookup.
+- `lib/db.ts` owns Prisma client access.
+- `prisma/schema.prisma` is the executable database schema.
+- `docs/technical-architecture.md` is the current architecture reference.
